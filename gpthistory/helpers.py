@@ -2,18 +2,24 @@ import json
 import os
 import pandas as pd
 import numpy as np
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 import logging
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from ~/.bin/.env first, then fallback to standard .env
+dotenv_path = os.path.expanduser("~/.bin/.env")
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+else:
+    load_dotenv()
 
-# Set up OpenAI API key
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+# Initialize OpenAI client
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 # Define the path to the index file in the user's home directory
-INDEX_PATH = os.path.join(os.path.expanduser('~'), '.chatsearch', 'chatindex.csv')
+INDEX_PATH = os.path.join(os.path.expanduser('~'), '.gpthistory', 'chatindex.csv')
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -40,27 +46,38 @@ def split_into_batches(array, batch_size):
 
 def generate_query_embedding(query):
     """
-    Generate an embedding for a query using OpenAI API.
+    Generate an embedding for a query using OpenAI API (updated for v1+).
     """
-    response = openai.Embedding.create(
-        input=[query],
-        model="text-embedding-ada-002"
-    )
-    return response['data'][0]['embedding']
+    try:
+        response = client.embeddings.create(
+            input=[query],
+            model="text-embedding-3-small"  # Updated to latest model
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        logger.error(f"Error generating query embedding: {e}")
+        return [0.0] * 1536  # Return zero vector on error
 
 def generate_embeddings(conversations):
     """
-    Generate embeddings for conversations using OpenAI API.
+    Generate embeddings for conversations using OpenAI API (updated for v1+).
     """
     embeddings = []
     for i, batch in enumerate(split_into_batches(conversations, 100)):
         logger.info(f"Generating Embeddings for batch: {i + 1}")
-        response = openai.Embedding.create(
-            input=batch,
-            model="text-embedding-ada-002"
-        )
-        tmp_embedding = [row['embedding'] for row in response['data']]
-        embeddings += tmp_embedding
+        try:
+            response = client.embeddings.create(
+                input=batch,
+                model="text-embedding-3-small"  # Updated to latest model
+            )
+            tmp_embedding = [embedding.embedding for embedding in response.data]
+            embeddings += tmp_embedding
+        except Exception as e:
+            logger.error(f"Error generating embeddings for batch {i + 1}: {e}")
+            # Add zero vectors for failed batch to maintain consistency
+            tmp_embedding = [[0.0] * 1536] * len(batch)
+            embeddings += tmp_embedding
+    
     if len(embeddings) > 0:
         logger.info("Conversations (Chunks) = %d", len(conversations))
         logger.info("Embeddings = %d", len(embeddings))
@@ -70,26 +87,33 @@ def generate_embeddings(conversations):
 
 def calculate_top_titles(df, query, top_n=1000):
     """
-    Calculate top titles for a given query using embeddings.
+    Calculate top titles for a given query using embeddings (updated for v1+).
     """
-    # Extract the embeddings from the DataFrame
-    embedding_array = np.array(df['embeddings'].tolist())
-    query_embedding = generate_query_embedding(query)
-    # Calculate the dot product between the query embedding and all embeddings in the DataFrame
-    dot_scores = np.dot(embedding_array, query_embedding)
+    try:
+        # Extract the embeddings from the DataFrame
+        embedding_array = np.array(df['embeddings'].tolist())
+        query_embedding = generate_query_embedding(query)
+        
+        # Calculate the dot product between the query embedding and all embeddings in the DataFrame
+        dot_scores = np.dot(embedding_array, query_embedding)
 
-    # Filter out titles with dot scores below the threshold
-    mask = dot_scores >= 0.8
-    filtered_dot_scores = dot_scores[mask]
-    filtered_titles = df.loc[mask, 'text'].tolist()
-    filtered_chat_ids = df.loc[mask, 'chat_id'].tolist()
+        # Filter out titles with dot scores below the threshold
+        mask = dot_scores >= 0.8
+        filtered_dot_scores = dot_scores[mask]
+        filtered_titles = df.loc[mask, 'text'].tolist()
+        filtered_chat_ids = df.loc[mask, 'chat_id'].tolist()
 
-    # Sort the filtered titles based on the dot scores (in descending order)
-    sorted_indices = np.argsort(filtered_dot_scores)[::-1][:top_n]
+        # Sort the filtered titles based on the dot scores (in descending order)
+        sorted_indices = np.argsort(filtered_dot_scores)[::-1][:top_n]
 
-    # Get the top N titles and their corresponding dot scores
-    chat_ids = [filtered_chat_ids[i] for i in sorted_indices]
-    top_n_titles = [filtered_titles[i] for i in sorted_indices]
-    top_n_dot_scores = filtered_dot_scores[sorted_indices]
+        # Get the top N titles and their corresponding dot scores
+        chat_ids = [filtered_chat_ids[i] for i in sorted_indices]
+        top_n_titles = [filtered_titles[i] for i in sorted_indices]
+        top_n_dot_scores = filtered_dot_scores[sorted_indices]
 
-    return chat_ids, top_n_titles, top_n_dot_scores
+        return chat_ids, top_n_titles, top_n_dot_scores
+        
+    except Exception as e:
+        logger.error(f"Error in calculate_top_titles: {e}")
+        # Return empty results on error
+        return [], [], []
