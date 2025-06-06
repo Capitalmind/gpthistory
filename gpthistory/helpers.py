@@ -97,11 +97,24 @@ def calculate_top_titles(df, query, top_n=1000):
         # Calculate the dot product between the query embedding and all embeddings in the DataFrame
         dot_scores = np.dot(embedding_array, query_embedding)
 
-        # Filter out titles with dot scores below the threshold
-        mask = dot_scores >= 0.8
+        # DEBUG: Show score distribution
+        logger.info(f"Score range: {dot_scores.min():.3f} to {dot_scores.max():.3f}, mean: {dot_scores.mean():.3f}")
+        logger.info(f"Scores above 0.3: {np.sum(dot_scores >= 0.3)}, above 0.5: {np.sum(dot_scores >= 0.5)}, above 0.8: {np.sum(dot_scores >= 0.8)}")
+
+        # Filter out titles with dot scores below the threshold (lowered from 0.8 to 0.3)
+        mask = dot_scores >= 0.3
         filtered_dot_scores = dot_scores[mask]
         filtered_titles = df.loc[mask, 'text'].tolist()
         filtered_chat_ids = df.loc[mask, 'chat_id'].tolist()
+
+        logger.info(f"Found {len(filtered_titles)} results above threshold 0.3")
+
+        if len(filtered_titles) == 0:
+            logger.info("No results found above threshold. Showing top 5 scores regardless:")
+            top_5_indices = np.argsort(dot_scores)[::-1][:5]
+            for i, idx in enumerate(top_5_indices):
+                logger.info(f"  {i+1}. Score: {dot_scores[idx]:.3f} - {df.iloc[idx]['text'][:100]}...")
+            return [], [], []
 
         # Sort the filtered titles based on the dot scores (in descending order)
         sorted_indices = np.argsort(filtered_dot_scores)[::-1][:top_n]
