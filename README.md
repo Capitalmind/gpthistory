@@ -1,87 +1,168 @@
-# gpthistory
+# GPTHistory - OpenAI API v1+ Compatible Fork
 
-`gpthistory` is a Python package that provides a powerful tool for indexing and searching ChatGPT conversations. This package allows users to build an index from chat data files, generate embeddings for efficient searching, and perform searches to find relevant conversations based on keywords.
+A Python command line tool to help you search your ChatGPT conversation history with semantic search using OpenAI embeddings.
 
+## 🆕 What's New in This Fork
+
+This fork updates the original gpthistory tool to work with modern OpenAI API:
+
+- ✅ **OpenAI API v1+ Compatible** - Works with latest OpenAI library
+- ✅ **Flexible API Key Loading** - Supports `~/.bin/.env` or standard `.env` files
+- ✅ **Latest Embedding Model** - Uses `text-embedding-3-small` for better performance
+- ✅ **Better Error Handling** - Graceful failures and detailed logging
+- ✅ **Backward Compatible** - Same CLI interface as original
 
 ## Installation
 
-You can easily install `gpthistory` via pip:
+### Install this updated fork (recommended)
 
 ```bash
-pip install gpthistory
+pipx install git+https://github.com/Capitalmind/gpthistory.git@updated-openai-api
 ```
 
+### Install from source
+
 ```bash
-# Installing from souce
-git clone git@github.com:sarchak/gpthistory.git
+git clone https://github.com/Capitalmind/gpthistory.git
 cd gpthistory
-pip install -e .
+git checkout updated-openai-api
+pipx install .
 ```
 
-## Download the conversation history
-Unfortunately, there is no way to programmatically get the conversation history. As as work around export
-the conversations by going to the Setting Section. One you get the email from OpenAI download and unzip the folder
-which contains the conversations.json file
+## Setup
 
-<img width="681" alt="SCR-20230726-ugkl" src="https://github.com/sarchak/gpthistory/assets/839293/212e5733-e0cf-4e4b-b45c-e1daaaeeaa4f">
+### 1. Export your ChatGPT conversations
 
-## Setting up OpenAI Key
-We use openai embeddings to find semantic similarity. Hence before building index. Make sure you set the OpenAI Key on the shell.
+1. Go to [ChatGPT Settings](https://chat.openai.com/settings) → Data controls → Export data
+2. Download and extract the ZIP file
+3. Locate the `conversations.json` file
 
-export OPENAI_API_KEY='your open ai key'
+### 2. Set up your OpenAI API key
 
-## Indexing and Search
-[![asciicast](https://asciinema.org/a/ht0KVofl1GZwLgP1SEHKwKzX8.svg)](https://asciinema.org/a/ht0KVofl1GZwLgP1SEHKwKzX8)
-### Indexing
+**Option 1: Create `~/.bin/.env` (recommended for centralized key storage)**
+```bash
+mkdir -p ~/.bin
+echo "OPENAI_API_KEY=your_api_key_here" >> ~/.bin/.env
+```
 
-The `build_index` command allows you to build an index from your chat data files. The tool extracts relevant text parts from each chat entry and stores them in the index along with their associated chat IDs and section IDs.
+**Option 2: Use standard `.env` in your project directory**
+```bash
+echo "OPENAI_API_KEY=your_api_key_here" >> .env
+```
 
-To build an index, run:
+Get your API key from: https://platform.openai.com/api-keys
+
+## Usage
+
+### Build the search index
 
 ```bash
-gpthistory build_index --file /path/to/conversations.json
+cd /path/to/your/chatgpt/export
+gpthistory build-index --file conversations.json
 ```
 
-Replace `/path/to/conversations.json` with the path to your chat data file in JSON format.
+This creates a searchable index with embeddings stored at `~/.gpthistory/chatindex.csv`
 
-### Searching
-
-Once you have built the index, you can perform searches using the `search` command. The tool takes a keyword as input and returns the top matching conversations from the index and also the conversation history link so that you can directly go to that link.
-
-To search for a keyword, run:
+### Search your conversations
 
 ```bash
-gpthistory search "your_keyword"
+gpthistory search "python coding tips"
+gpthistory search "machine learning algorithms"
+gpthistory search "debugging techniques"
 ```
 
-Replace `"your_keyword"` with the keyword you want to search for.
+Results include:
+- Matching conversation excerpts
+- Similarity scores
+- Direct ChatGPT conversation links
 
-The search algorithm uses embeddings to efficiently match the keyword against the indexed text parts. It calculates dot product scores between the query embedding and all embeddings in the index. Conversations with dot product scores above a certain threshold are considered as top matches.
+## What This Fork Fixes
+
+### ❌ Original Issues
+- `APIRemovedInV1` errors with OpenAI v1+
+- Hardcoded API key setup requirements
+- Outdated embedding models
+- Poor error handling for API failures
+
+### ✅ Fork Improvements
+- Full OpenAI API v1+ compatibility
+- Flexible API key loading from multiple sources
+- Updated to `text-embedding-3-small` model
+- Comprehensive error handling and logging
+- Maintained CLI interface compatibility
+
+## API Changes
+
+**Original (broken with OpenAI v1+):**
+```python
+import openai
+openai.api_key = "your-key"
+response = openai.Embedding.create(...)
+```
+
+**This fork (v1+ compatible):**
+```python
+from openai import OpenAI
+client = OpenAI(api_key="your-key")
+response = client.embeddings.create(...)
+```
+
+## Cost Considerations
+
+- Uses OpenAI's `text-embedding-3-small` model (~$0.02 per 1M tokens)
+- Large conversation histories may cost a few dollars to index
+- Incremental indexing only processes new conversations on subsequent runs
+
+## Requirements
+
+- Python 3.8+
+- OpenAI API key with billing enabled
+- ChatGPT conversation export file
+
+## Troubleshooting
+
+### "APIRemovedInV1" Error
+You're using the original version. Install this fork:
+```bash
+pipx install git+https://github.com/Capitalmind/gpthistory.git@updated-openai-api
+```
+
+### "API Key not found"
+Set up your API key in `~/.bin/.env`:
+```bash
+echo "OPENAI_API_KEY=sk-your-key-here" >> ~/.bin/.env
+```
+
+### Command not found
+Ensure pipx is installed and in your PATH:
+```bash
+sudo apt install pipx
+pipx ensurepath
+```
 
 ## Example Usage
 
 ```bash
-# Build the index from conversations.json
-gpthistory build_index --file conversations.json
+# Build index from your ChatGPT export
+gpthistory build-index --file conversations.json
 
-# Search for conversations related to "chatbot"
-gpthistory search "chatbot"
+# Search for conversations about specific topics
+gpthistory search "machine learning"
+gpthistory search "code optimization"
+gpthistory search "debugging python"
 ```
+
+## Contributing
+
+This is a community-maintained fork of [sarchak/gpthistory](https://github.com/sarchak/gpthistory).
+
+Found a bug or want to contribute? Open an issue or submit a pull request!
 
 ## License
 
-`gpthistory` is distributed under the MIT License. See [LICENSE](LICENSE) for more information.
+MIT License - same as the original project.
 
-## Author
+## Credits
 
-Your Name
-Twitter: [shrikar84](https://x.com/shrikar84)
-
-## Feedback and Contributions
-
-We welcome feedback and contributions to improve `gpthistory`. If you encounter any issues, have suggestions, or want to contribute, please create an issue or submit a pull request on our [GitHub repository](https://github.com/sarchak/gpthistory).
-
-## Disclaimer
-
-Please note that this tool is intended for research and educational purposes. Make sure you have proper permissions and adhere to the usage terms and conditions of the data sources you analyze with this tool.
-
+- Original project: [sarchak/gpthistory](https://github.com/sarchak/gpthistory) by [@shrikar84](https://x.com/shrikar84)
+- OpenAI v1+ compatibility updates: [@Capitalmind](https://github.com/Capitalmind)
